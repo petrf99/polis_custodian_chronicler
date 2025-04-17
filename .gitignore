@@ -3,5 +3,6 @@ pgdata/
 __pycache__/
 *.pyc
 audio/
+transcripts/
 test.py
 main.py
