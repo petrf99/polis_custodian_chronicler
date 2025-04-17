@@ -4,3 +4,4 @@ sentence-transformers
 psycopg2-binary
 python-dotenv
 aiogram==3.4.1
+pydub

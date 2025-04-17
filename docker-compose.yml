@@ -4,26 +4,14 @@ services:
   app:
     build: .
     container_name: chronicler
+    restart: always
     volumes:
       - .:/app
-    environment:
-      - DATABASE_URL=${POSTGRES_URL}
-    depends_on:
-      - db
     env_file:
       - .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: python bot.py
-
-  db:
-    image: postgres:15
-    container_name: chronicler_pg
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-volumes:
-  pgdata:
