@@ -6,7 +6,9 @@ services:
     container_name: chronicler
     restart: always
     volumes:
-      - .:/app
+    - .:/project
+    working_dir: /project/app
+
     env_file:
       - .env
     logging:
