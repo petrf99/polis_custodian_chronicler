@@ -10,7 +10,9 @@ services:
       - DATABASE_URL=${POSTGRES_URL}
     depends_on:
       - db
-    command: python main.py
+    env_file:
+      - .env
+    command: python bot.py
 
   db:
     image: postgres:15
