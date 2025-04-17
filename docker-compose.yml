@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: chronicler
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=${POSTGRES_URL}
+    depends_on:
+      - db
+    command: python main.py
+
+  db:
+    image: postgres:15
+    container_name: chronicler_pg
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

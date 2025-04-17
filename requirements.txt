@@ -1,0 +1,5 @@
+openai-whisper
+ffmpeg-python
+sentence-transformers
+psycopg2-binary
+python-dotenv
