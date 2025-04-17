@@ -2,3 +2,6 @@
 pgdata/
 __pycache__/
 *.pyc
+audio/
+test.py
+main.py
