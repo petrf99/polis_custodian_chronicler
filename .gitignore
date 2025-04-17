@@ -2,7 +2,6 @@
 pgdata/
 __pycache__/
 *.pyc
-audio/
-transcripts/
-test.py
+data/audio/*
+data/transcripts/*
 main.py

@@ -1,8 +1,8 @@
 import os
-import time
 import uuid
 import whisper
 from math import exp
+from pathlib import Path
 
 def transcribe_audio(file_path: str, args: dict) -> list:
     """
@@ -17,7 +17,8 @@ def transcribe_audio(file_path: str, args: dict) -> list:
     session_start_dttm = args.get("session_start_dttm", '')
     output_type = args.get("output_type", "text")
 
-    text_save_dir = os.getenv("TRANSCRIPTS_DIR", "transcripts/")
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    text_save_dir = BASE_DIR / os.getenv("TRANSCRIPTS_DIR", "data/transcripts")
     os.makedirs(text_save_dir, exist_ok=True)
 
     print(f"[TRANSCRIBE] Starting transcription {session_id}\nModel={model_size}, lang={language}, temp={temperature}")

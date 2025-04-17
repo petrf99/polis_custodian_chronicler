@@ -7,6 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
 import asyncio
 import os
+from pathlib import Path
 import datetime
 import uuid
 from whisper_worker import transcribe_audio
@@ -28,7 +29,8 @@ dp = Dispatcher(storage=MemoryStorage())
 
 timeout_seconds = int(os.getenv("TIMEOUT_SECONDS", 600))
 
-audio_save_dir = os.getenv("AUDIO_DIR", "audio/")
+BASE_DIR = Path(__file__).resolve().parent.parent
+audio_save_dir = BASE_DIR / os.getenv("AUDIO_DIR", "data/audio")
 os.makedirs(audio_save_dir, exist_ok=True)
 
 # Start button
