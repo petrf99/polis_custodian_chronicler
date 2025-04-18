@@ -3,6 +3,7 @@ services:
     build: .
     container_name: chronicler
     restart: always
+    network_mode: "host"
     volumes:
     - ./app:/app
     - ./data:/data
@@ -15,4 +16,4 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    command: python bot.py
+    command: python main.py

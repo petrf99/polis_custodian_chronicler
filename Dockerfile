@@ -14,4 +14,4 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Set entrypoint (main command)
-CMD ["python", "bot.py"]
+CMD ["python", "main.py"]

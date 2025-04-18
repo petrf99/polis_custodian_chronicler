@@ -1,17 +1,16 @@
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.enums import ParseMode
 import asyncio
 import os
 from pathlib import Path
 import datetime
 import uuid
-from whisper_worker import transcribe_audio
-from transcript_duration_estimate import estimate_transcription_time
+from services.transcript.run_transcription import run_transcription
+from services.ui_utils.tg_sess_timeout_watcher import start_timeout_watcher
+from ui.create_buttons import create_buttons
 
 
 # FSM: all session states
@@ -23,85 +22,19 @@ class FormStates(StatesGroup):
     waiting_audio = State()
     waiting_store_decision = State()
 
+# Set up bot
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+# Set up some params
 timeout_seconds = int(os.getenv("TIMEOUT_SECONDS", 600))
-
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path.cwd().parent #Path(__file__).resolve().parent.parent
 audio_save_dir = BASE_DIR / os.getenv("AUDIO_DIR", "data/audio")
 os.makedirs(audio_save_dir, exist_ok=True)
 
-# Start button
-start_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="✉️ Send file", callback_data="start_session")]
-])
-
-# Language selection buttons
-language_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="English", callback_data="lang_en"),
-     InlineKeyboardButton(text="Russian", callback_data="lang_ru")],
-    [InlineKeyboardButton(text="Español", callback_data="lang_es"),
-     InlineKeyboardButton(text="Auto", callback_data="lang_auto")]
-])
-
-# Whisper model size buttons
-model_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="tiny(x0.25)", callback_data="model_tiny"),
-     InlineKeyboardButton(text="base(x0.5)", callback_data="model_base")],
-    [InlineKeyboardButton(text="small(x1.0)", callback_data="model_small"),
-     InlineKeyboardButton(text="medium(x2.0)", callback_data="model_medium"),
-     InlineKeyboardButton(text="large(x4.0)", callback_data="model_large")]
-])
-
-# Temperature buttons
-temp_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="0.0 (accurate)", callback_data="temp_0.0"),
-     InlineKeyboardButton(text="0.5 (balanced)", callback_data="temp_0.5")],
-    [InlineKeyboardButton(text="1.0 (creative)", callback_data="temp_1.0")],
-    [InlineKeyboardButton(text="Use default", callback_data="temp_default")]
-])
-
-# Output type buttons
-output_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="🔤 Full Text", callback_data="output_text"),
-     InlineKeyboardButton(text="🔄 Info only", callback_data="output_info")]
-])
-
-# Store decision buttons
-store_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="Yes, save it", callback_data="store_yes"),
-     InlineKeyboardButton(text="No, don't save", callback_data="store_no")]
-])
-
-# Session time out
-async def start_timeout_watcher(
-    state: FSMContext,
-    target_state: State,
-    timeout_seconds: int,
-    callback_message: types.Message
-):
-    await asyncio.sleep(timeout_seconds)
-    current = await state.get_state()
-    if current == target_state.state:
-        await state.clear()
-        await callback_message.answer(
-            "⏳ Session expired due to inactivity.\nPlease start again.",
-            reply_markup=start_kb
-        )
-
-
-# Download audio from Telegram
-async def download_audio_from_telegram(bot: Bot, file_id: str, save_path: str) -> str:
-    file = await bot.get_file(file_id)
-    file_path = file.file_path
-    destination = os.path.join(save_path, f"{file_id}.ogg")
-
-    await bot.download_file(file_path, destination)
-    return destination
-
-
+# Create buttons
+start_kb, language_kb, model_kb, temp_kb, output_kb, store_kb = create_buttons()
 
 # Entry point
 @dp.message(CommandStart())
@@ -127,13 +60,15 @@ async def start_session(callback: types.CallbackQuery, state: FSMContext):
         return
     session_id = str(uuid.uuid4())
     print(f"[START SESSION] {session_id}")
+
     await state.update_data(session_id=session_id)
     await state.update_data(session_start_dttm=datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
     await state.update_data(user_id=callback.from_user.id)
+
     await callback.message.answer("Choose the language of your audio:", reply_markup=language_kb)
     await state.set_state(FormStates.waiting_language)
 
-    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_language, timeout_seconds=timeout_seconds, callback_message=callback.message))
+    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_language, timeout_seconds=timeout_seconds, callback_message=callback.message, start_kb=start_kb))
 
 
 @dp.callback_query(FormStates.waiting_language, F.data.startswith("lang_"))
@@ -143,7 +78,7 @@ async def select_language(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer("Choose the model size (the bigger size - the longer time):", reply_markup=model_kb)
     await state.set_state(FormStates.waiting_model)
 
-    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_model, timeout_seconds=timeout_seconds, callback_message=callback.message))
+    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_model, timeout_seconds=timeout_seconds, callback_message=callback.message, start_kb=start_kb))
 
 
 @dp.callback_query(FormStates.waiting_model, F.data.startswith("model_"))
@@ -156,7 +91,7 @@ async def select_model(callback: types.CallbackQuery, state: FSMContext):
     )
     await state.set_state(FormStates.waiting_temperature)
 
-    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_temperature, timeout_seconds=timeout_seconds, callback_message=callback.message))
+    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_temperature, timeout_seconds=timeout_seconds, callback_message=callback.message, start_kb=start_kb))
 
 
 @dp.callback_query(FormStates.waiting_temperature, F.data.startswith("temp_"))
@@ -167,7 +102,7 @@ async def select_temperature(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer("Choose what you want to receive:", reply_markup=output_kb)
     await state.set_state(FormStates.waiting_output_type)
 
-    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_output_type, timeout_seconds=timeout_seconds, callback_message=callback.message))
+    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_output_type, timeout_seconds=timeout_seconds, callback_message=callback.message, start_kb=start_kb))
 
 
 @dp.callback_query(FormStates.waiting_output_type)
@@ -177,7 +112,7 @@ async def select_output_type(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer("🆗 Great. Now send me your audio file or voice message.")
     await state.set_state(FormStates.waiting_audio)
 
-    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_audio, timeout_seconds=timeout_seconds, callback_message=callback.message))
+    asyncio.create_task(start_timeout_watcher(state=state, target_state=FormStates.waiting_audio, timeout_seconds=timeout_seconds, callback_message=callback.message, start_kb=start_kb))
 
 @dp.message(FormStates.waiting_audio, F.voice | F.audio | F.document)
 async def receive_audio(message: types.Message, state: FSMContext):
@@ -200,41 +135,8 @@ async def receive_audio(message: types.Message, state: FSMContext):
     await bot.send_message(
             chat_id=data['chat_id'],
             text=f"Transcript ID: {session_id}")
-    
-    # Launch background whisper transcription
-    async def run_transcription(data):
 
-        print("[TRANSCRIPT STARTED]", data['session_id'])
-        file_path = await download_audio_from_telegram(bot, data["file_id"], save_path=audio_save_dir)
-        transcript_dur = estimate_transcription_time(file_path, data['model'])
-
-        await bot.send_message(
-            chat_id=data['chat_id'],
-            text=f"⏳ Estimated time for transcript {data['session_id']}:\n{transcript_dur} seconds"
-        )
-
-        result = await asyncio.to_thread(transcribe_audio, file_path, data)
-
-        await bot.send_message(
-            chat_id=data['chat_id'],
-            text=f"✅ Done! Here is some info about your transcript 👇\nID: {session_id}\n\n{result[0]}")
-
-        if result[1] is not None:
-            await bot.send_document(
-            chat_id=data['chat_id'],
-            document=types.FSInputFile(result[1]),
-            caption=f"Your transcript, Sir 📄\nID: {session_id}"
-            )
-        
-        await bot.send_message(
-            chat_id=data['chat_id'],
-            text=f"\n\nDo you want to save it to our Chronicle? 📜", 
-            reply_markup=store_kb
-        )
-            
-        print("[TRANSCRIPT ENDED]", data['session_id'])
-
-    asyncio.create_task(run_transcription(data))
+    asyncio.create_task(run_transcription(bot, data, audio_save_dir, store_kb))
 
 
     await state.set_state(FormStates.waiting_store_decision)
@@ -244,7 +146,8 @@ async def receive_audio(message: types.Message, state: FSMContext):
                 state=state,
                 target_state=FormStates.waiting_store_decision,
                 timeout_seconds=timeout_seconds,
-                callback_message=message
+                callback_message=message,
+                start_kb=start_kb
             )
         )
 
@@ -266,8 +169,5 @@ async def store_decision(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer("Session ended 🫡. Ready for another one:", reply_markup=start_kb)
 
 # Main loop
-async def main():
+async def start_bot():
     await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())

@@ -1,4 +1,5 @@
 import os
+import json
 import uuid
 import whisper
 from math import exp
@@ -17,7 +18,7 @@ def transcribe_audio(file_path: str, args: dict) -> list:
     session_start_dttm = args.get("session_start_dttm", '')
     output_type = args.get("output_type", "text")
 
-    BASE_DIR = Path(__file__).resolve().parent.parent
+    BASE_DIR = Path.cwd().parent #Path(__file__).resolve().parent.parent
     text_save_dir = BASE_DIR / os.getenv("TRANSCRIPTS_DIR", "data/transcripts")
     os.makedirs(text_save_dir, exist_ok=True)
 
@@ -33,7 +34,29 @@ def transcribe_audio(file_path: str, args: dict) -> list:
         temperature=temperature
     )
 
-    transcript = result["text"]
+    segments = result["segments"]
+
+    utterances = []
+
+    for seg in segments:
+        utterance = {
+            "id": str(uuid.uuid4()),
+            "dialog_id": str(session_id),
+            "content": seg["text"],
+            "start_time": seg["start"],
+            "end_time": seg["end"],
+            "segment_number": seg["id"],
+            "created_at": str(session_start_dttm),
+            "speaker": user_id,         # Можно будет потом добавить
+            "metadata": {}
+        }
+        utterances.append(utterance)
+    
+    os.makedirs("jobs/speech2text/temp/", exist_ok=True)
+    with open(f"jobs/speech2text/temp/utterances_{session_id}.json", "w", encoding="utf-8") as f:
+        json.dump(utterances, f, ensure_ascii=False, indent=2)
+
+
     avg_logprob = result["segments"][0]["avg_logprob"] if result.get("segments") else None
     no_speech_prob = result.get("no_speech_prob", None)
 
@@ -47,10 +70,11 @@ def transcribe_audio(file_path: str, args: dict) -> list:
 
     # Decide whether to save full text
     file_path_txt = None
-    if output_type == "text" and transcript.strip():
+    if output_type == "text" and result["text"].strip():
+        transcript = "\n\n".join(u["content"].strip() for u in utterances)
         filename = f"transcript_{user_id}_{session_start_dttm}.txt"
         file_path_txt = os.path.join(text_save_dir, filename)
         with open(file_path_txt, "w", encoding="utf-8") as f:
             f.write(transcript)
 
-    return [summary, file_path_txt]
+    return [summary, file_path_txt, session_id]

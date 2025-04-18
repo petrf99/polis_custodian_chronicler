@@ -3,8 +3,8 @@ from pydub import AudioSegment
 import json
 import os
 
-SPEED_CONFIG_PATH = "config/whisper_speed_factors.json"
-LOAD_CONFIG_PATH = "config/whisper_model_load_time.json"
+SPEED_CONFIG_PATH = "services/transcript/configs/whisper_speed_factors.json"
+LOAD_CONFIG_PATH = "services/transcript/configs/whisper_model_load_time.json"
 
 if os.path.exists(SPEED_CONFIG_PATH) and os.path.exists(LOAD_CONFIG_PATH):
     with open(SPEED_CONFIG_PATH, "r") as f:
@@ -12,6 +12,7 @@ if os.path.exists(SPEED_CONFIG_PATH) and os.path.exists(LOAD_CONFIG_PATH):
     with open(LOAD_CONFIG_PATH, "r") as f:
         MODEL_LOAD_TIME = json.load(f)
 else:
+    print('Transcript time estimation config load failed!')
     MODEL_SPEED_FACTORS = {
         "tiny": 0.25,
         "base": 0.5,

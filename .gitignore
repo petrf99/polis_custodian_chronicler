@@ -3,8 +3,6 @@ pgdata/
 __pycache__/
 *.pyc
 
-main.py
-
 data/audio/*
 !data/audio/.gitkeep
 data/transcripts/*
