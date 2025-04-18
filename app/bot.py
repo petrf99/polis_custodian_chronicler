@@ -191,28 +191,9 @@ async def receive_audio(message: types.Message, state: FSMContext):
         await message.reply("This doesn't look like an audio file. Only audio formats are supported.")
         return
 
-    await message.reply("✔️ Your file has been received. Do you want to save it to our Chronicle?", reply_markup=store_kb)
+    await message.reply("✔️ Your file has been received. You will be notified once the transcript is done. 🔔")
     await state.update_data(file_id=file.file_id)
     await state.update_data(chat_id=message.chat.id)
-    await state.set_state(FormStates.waiting_store_decision)
-
-    asyncio.create_task(
-            start_timeout_watcher(
-                state=state,
-                target_state=FormStates.waiting_store_decision,
-                timeout_seconds=timeout_seconds,
-                callback_message=message
-            )
-        )
-
-@dp.callback_query(FormStates.waiting_store_decision)
-async def store_decision(callback: types.CallbackQuery, state: FSMContext):
-    if callback.data == "store_yes":
-        await callback.message.answer("Your file will be saved to the Chronicle. 📄 \nIt's being transcribed. You will be notified once the transcript is done. 🔔")
-        await state.update_data(store_decision=True)
-    else:
-        await callback.message.answer("Okay, file will not be saved. \nIt's being transcribed. You will be notified once the transcript is done. 🔔")
-        await state.update_data(store_decision=False)
 
     data = await state.get_data()
     session_id = data['session_id']
@@ -242,12 +223,40 @@ async def store_decision(callback: types.CallbackQuery, state: FSMContext):
             await bot.send_document(
             chat_id=data['chat_id'],
             document=types.FSInputFile(result[1]),
-            caption=f"Your transcript, Sir 📄\nID: {session_id}\n\nReady for another one:", reply_markup=start_kb
+            caption=f"Your transcript, Sir 📄\nID: {session_id}"
+            )
+        
+        await bot.send_message(
+            chat_id=data['chat_id'],
+            text=f"\n\nDo you want to save it to our Chronicle? 📜", 
+            reply_markup=store_kb
         )
             
         print("[TRANSCRIPT ENDED]", data['session_id'])
 
     asyncio.create_task(run_transcription(data))
+
+
+    await state.set_state(FormStates.waiting_store_decision)
+
+    asyncio.create_task(
+            start_timeout_watcher(
+                state=state,
+                target_state=FormStates.waiting_store_decision,
+                timeout_seconds=timeout_seconds,
+                callback_message=message
+            )
+        )
+
+@dp.callback_query(FormStates.waiting_store_decision)
+async def store_decision(callback: types.CallbackQuery, state: FSMContext):
+    if callback.data == "store_yes":
+        await callback.message.answer("Your file will be saved to the Chronicle. 🦾")
+        await state.update_data(store_decision=True)
+    else:
+        await callback.message.answer("Okay, file will not be saved.")
+        await state.update_data(store_decision=False)
+
     
     data = await state.get_data()
     print(f"[END SESSION] {data['session_id']}")
