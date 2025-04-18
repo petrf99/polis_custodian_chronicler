@@ -1,18 +1,20 @@
 # services/transcript.py
 from aiogram import Bot, types
 import asyncio
+import datetime
 from jobs.speech2text.whisper_worker import transcribe_audio
 from services.transcript.transcript_duration_estimate import estimate_transcription_time
 from services.ui_utils.tg_audio_download import download_audio_from_telegram
 
 async def run_transcription(bot: Bot, data: dict, audio_save_dir: str, kb):
     session_id = data['session_id']
+    print("[TRANSCRIPT STARTED]", session_id)
     file_path = await download_audio_from_telegram(bot, data["file_id"], save_path=audio_save_dir)
     transcript_dur = estimate_transcription_time(file_path, data['model'])
 
     await bot.send_message(
         chat_id=data['chat_id'],
-        text=f"⏳ Estimated time for transcript {session_id}:\n{transcript_dur} seconds"
+        text=f"⏳ Estimated time for transcript:\n\n{str(datetime.timedelta(seconds=transcript_dur))}"
     )
 
     result = await asyncio.to_thread(transcribe_audio, file_path, data)

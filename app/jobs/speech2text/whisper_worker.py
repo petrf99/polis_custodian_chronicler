@@ -5,6 +5,10 @@ import whisper
 from math import exp
 from pathlib import Path
 
+import torch
+torch.set_num_threads(2)
+
+
 def transcribe_audio(file_path: str, args: dict) -> list:
     """
     Transcribes an audio file using Whisper and returns:

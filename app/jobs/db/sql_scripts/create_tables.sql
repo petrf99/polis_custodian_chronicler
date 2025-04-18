@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS dialogs (
     title TEXT,
     started_at TIMESTAMP,
     ended_at TIMESTAMP,
-    topic_id INTEGER REFERENCES topics(id),
+    topic_id INTEGER,
     tags TEXT[],
     source TEXT,
     participants TEXT[],

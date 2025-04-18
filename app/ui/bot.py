@@ -11,6 +11,7 @@ import uuid
 from services.transcript.run_transcription import run_transcription
 from services.ui_utils.tg_sess_timeout_watcher import start_timeout_watcher
 from ui.create_buttons import create_buttons
+from services.db_interaction.save_to_chronicle import save_to_chronicle
 
 
 # FSM: all session states
@@ -62,7 +63,7 @@ async def start_session(callback: types.CallbackQuery, state: FSMContext):
     print(f"[START SESSION] {session_id}")
 
     await state.update_data(session_id=session_id)
-    await state.update_data(session_start_dttm=datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
+    await state.update_data(session_start_dttm=datetime.datetime.now().isoformat())
     await state.update_data(user_id=callback.from_user.id)
 
     await callback.message.answer("Choose the language of your audio:", reply_markup=language_kb)
@@ -141,15 +142,6 @@ async def receive_audio(message: types.Message, state: FSMContext):
 
     await state.set_state(FormStates.waiting_store_decision)
 
-    asyncio.create_task(
-            start_timeout_watcher(
-                state=state,
-                target_state=FormStates.waiting_store_decision,
-                timeout_seconds=timeout_seconds,
-                callback_message=message,
-                start_kb=start_kb
-            )
-        )
 
 @dp.callback_query(FormStates.waiting_store_decision)
 async def store_decision(callback: types.CallbackQuery, state: FSMContext):
@@ -162,6 +154,10 @@ async def store_decision(callback: types.CallbackQuery, state: FSMContext):
 
     
     data = await state.get_data()
+
+    if data["store_decision"]:
+        asyncio.create_task(save_to_chronicle(bot, data['session_id'], data['chat_id']))
+
     print(f"[END SESSION] {data['session_id']}")
     print(f"[SESSION DATA] {data}")
 
