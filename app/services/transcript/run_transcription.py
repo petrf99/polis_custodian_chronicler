@@ -1,5 +1,6 @@
 # services/transcript.py
 from aiogram import Bot, types
+import os
 import asyncio
 import datetime
 from jobs.speech2text.whisper_worker import transcribe_audio
@@ -36,5 +37,8 @@ async def run_transcription(bot: Bot, data: dict, audio_save_dir: str, kb):
         text=f"\n\nDo you want to save it to our Chronicle? 📜",
         reply_markup=kb
     )
+
+    os.remove(result[1])
+    os.remove(audio_save_dir)
 
     print("[TRANSCRIPT ENDED]", session_id)
