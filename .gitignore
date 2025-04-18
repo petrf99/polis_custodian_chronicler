@@ -3,6 +3,7 @@ pgdata/
 __pycache__/
 *.pyc
 
+app/jobs/speech2text/temp
 data/audio/*
 !data/audio/.gitkeep
 data/transcripts/*
