@@ -37,10 +37,4 @@ def create_buttons():
         InlineKeyboardButton(text="🔄 Info only", callback_data="output_info")]
     ])
 
-    # Store decision buttons
-    store_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Yes, save it", callback_data="store_yes"),
-        InlineKeyboardButton(text="No, don't save", callback_data="store_no")]
-    ])
-
-    return start_kb, language_kb, model_kb, temp_kb, output_kb, store_kb
+    return start_kb, language_kb, model_kb, temp_kb, output_kb

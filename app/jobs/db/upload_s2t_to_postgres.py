@@ -5,6 +5,9 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from logging import getLogger
+logger = getLogger(__name__)
+
 POSTGRES_URL = os.getenv("POSTGRES_URL")
 
 def load_json(file_path: str):
@@ -12,8 +15,10 @@ def load_json(file_path: str):
         return json.load(f)
 
 def insert_utterances(utterances: list[dict]):
+    logger.info("[INSERT DATA TO PGSQL. CONNECT TO DB]")
     conn = psycopg2.connect(POSTGRES_URL)
     cursor = conn.cursor()
+    logger.info("[INSERT DATA TO PGSQL. CONNECTION ESTABLISHED]")
 
     dialog_insert_query = """
         INSERT INTO dialogs (
@@ -31,6 +36,7 @@ def insert_utterances(utterances: list[dict]):
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
+    logger.info("[INSERT DIALOG]")
     cursor.execute(
             dialog_insert_query,
             (
@@ -56,6 +62,7 @@ def insert_utterances(utterances: list[dict]):
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
+    logger.info("[INSERT UTTERANCES]")
     for u in utterances:
         cursor.execute(
             utt_insert_query,
@@ -75,16 +82,18 @@ def insert_utterances(utterances: list[dict]):
     conn.commit()
     cursor.close()
     conn.close()
-    print(f"Uploaded {len(utterances)} utterances to Postgres successfully")
+    logger.info(f"Uploaded {len(utterances)} utterances to Postgres successfully")
 
+from safe_func_dec import safe_run_sync
+@safe_run_sync
 def run_import(json_path: str):
-    print(f"[IMPORT] Загрузка из {json_path}")
+    logger.info(f"[IMPORT] Загрузка из {json_path}")
     data = load_json(json_path)
     insert_utterances(data)
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
-        print("Use: python import_utterances.py path/to/utterances.json")
+        logger.info("Use: python import_utterances.py path/to/utterances.json")
     else:
         run_import(sys.argv[1])

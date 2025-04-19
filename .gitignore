@@ -4,7 +4,5 @@ __pycache__/
 *.pyc
 
 app/jobs/speech2text/temp
-data/audio/*
-!data/audio/.gitkeep
-data/transcripts/*
-!data/transcripts/.gitkeep
+app/temp_data/audio/
+app/temp_data/transcripts/

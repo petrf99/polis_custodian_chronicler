@@ -2,8 +2,11 @@ from jobs.db.upload_s2t_to_postgres import run_import
 from aiogram import Bot
 import os
 
+from logging import getLogger
+logger = getLogger(__name__)
+
 async def save_to_chronicle(bot: Bot, session_id, chat_id):
-    print('[CHRONICLE UPLOAD STARTED]', session_id)
+    logger.info(f'[CHRONICLE UPLOAD STARTED] {session_id}')
     ut_file_name = f"jobs/speech2text/temp/utterances_{session_id}.json"
 
     await bot.send_message(
@@ -22,5 +25,5 @@ async def save_to_chronicle(bot: Bot, session_id, chat_id):
 
     os.remove(ut_file_name)
 
-    print('[CHRONICLE UPLOAD ENDED]', session_id)
+    logger.info(f"[CHRONICLE UPLOAD ENDED] {session_id}")
 

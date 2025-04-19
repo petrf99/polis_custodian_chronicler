@@ -5,13 +5,15 @@ from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.fsm.storage.memory import MemoryStorage
 import asyncio
 import os
-from pathlib import Path
 import datetime
 import uuid
 from services.transcript.run_transcription import run_transcription
 from services.ui_utils.tg_sess_timeout_watcher import start_timeout_watcher
 from ui.create_buttons import create_buttons
 from services.db_interaction.save_to_chronicle import save_to_chronicle
+
+from logging import getLogger
+logger = getLogger(__name__)
 
 
 # FSM: all session states
@@ -30,12 +32,9 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # Set up some params
 timeout_seconds = int(os.getenv("TIMEOUT_SECONDS", 600))
-BASE_DIR = Path.cwd().parent #Path(__file__).resolve().parent.parent
-audio_save_dir = BASE_DIR / os.getenv("AUDIO_DIR", "data/audio")
-os.makedirs(audio_save_dir, exist_ok=True)
 
 # Create buttons
-start_kb, language_kb, model_kb, temp_kb, output_kb, store_kb = create_buttons()
+start_kb, language_kb, model_kb, temp_kb, output_kb = create_buttons()
 
 # Entry point
 @dp.message(CommandStart())
@@ -44,6 +43,7 @@ async def cmd_start(message: types.Message):
         "Welcome to the Polis Chronicler Bot 🏛️\nHere you can send your audio dialogues to transcribe them and record into our Chronicle.\nClick the button below to begin.",
         reply_markup=start_kb
     )
+    logger.info('[BOT IS WORKING]')
 
 # Prevent users from spamming random messages outside the flow
 @dp.message(F.state == default_state)
@@ -60,7 +60,7 @@ async def start_session(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("You already have an active session. Finish it first. 🔄", show_alert=True)
         return
     session_id = str(uuid.uuid4())
-    print(f"[START SESSION] {session_id}")
+    logger.info(f"[START SESSION] {session_id}")
 
     await state.update_data(session_id=session_id)
     await state.update_data(session_start_dttm=datetime.datetime.now().isoformat())
@@ -136,34 +136,38 @@ async def receive_audio(message: types.Message, state: FSMContext):
     await bot.send_message(
             chat_id=data['chat_id'],
             text=f"Transcript ID: {session_id}")
-
-    asyncio.create_task(run_transcription(bot, data, audio_save_dir, store_kb))
-
-
-    await state.set_state(FormStates.waiting_store_decision)
-
-
-@dp.callback_query(FormStates.waiting_store_decision)
-async def store_decision(callback: types.CallbackQuery, state: FSMContext):
-    if callback.data == "store_yes":
-        await callback.message.answer("Your file will be saved to the Chronicle. 🦾")
-        await state.update_data(store_decision=True)
-    else:
-        await callback.message.answer("Okay, file will not be saved.")
-        await state.update_data(store_decision=False)
-
     
-    data = await state.get_data()
+    logger.info(f"[SEND TRANSCRIPTION TASK] {data['session_id']}")
+    asyncio.create_task(run_transcription(bot, data))
 
-    if data["store_decision"]:
-        asyncio.create_task(save_to_chronicle(bot, data['session_id'], data['chat_id']))
 
-    print(f"[END SESSION] {data['session_id']}")
-    print(f"[SESSION DATA] {data}")
+    logger.info(f"[END SESSION] {data['session_id']}")
+    logger.info(f"[SESSION DATA] {data}")
+
+    chat_id = data['chat_id']
 
     await state.clear()
-    await callback.message.answer("Session ended 🫡. Ready for another one:", reply_markup=start_kb)
+    await bot.send_message(chat_id=chat_id, text="Session ended 🫡. Ready for another one:", reply_markup=start_kb)
+
+
+@dp.callback_query(F.data.startswith("store_"))
+async def store_decision(callback: types.CallbackQuery):
+    cb_data = callback.data.split('_')
+    if cb_data[1] == "yes":
+        await callback.message.answer("Your file will be saved to the Chronicle. 🦾")
+    else:
+        await callback.message.answer("Okay, file will not be saved.")
+
+    
+
+    if cb_data[1] == "yes":
+        asyncio.create_task(save_to_chronicle(bot, cb_data[3], cb_data[2]))
+        logger.info(f'[SEND CHRONICLE SAVING TASK] {cb_data[3]}')
+
+    await bot.send_message(chat_id=cb_data[2], text="Do you want to send another file? 🫴", reply_markup=start_kb)
+
 
 # Main loop
 async def start_bot():
+    logger.info('[START BOT POLLING]')
     await dp.start_polling(bot)

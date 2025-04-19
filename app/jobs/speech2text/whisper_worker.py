@@ -6,9 +6,13 @@ from math import exp
 from pathlib import Path
 
 import torch
-torch.set_num_threads(2)
+torch.set_num_threads(int(os.getenv("TRANSCRIBE_THREADS", 2)))
 
+from logging import getLogger
+logger = getLogger(__name__)
 
+from safe_func_dec import safe_run_sync
+@safe_run_sync
 def transcribe_audio(file_path: str, args: dict) -> list:
     """
     Transcribes an audio file using Whisper and returns:
@@ -22,21 +26,24 @@ def transcribe_audio(file_path: str, args: dict) -> list:
     session_start_dttm = args.get("session_start_dttm", '')
     output_type = args.get("output_type", "text")
 
-    BASE_DIR = Path.cwd().parent #Path(__file__).resolve().parent.parent
-    text_save_dir = BASE_DIR / os.getenv("TRANSCRIPTS_DIR", "data/transcripts")
+    BASE_DIR = Path.cwd() #Path(__file__).resolve().parent.parent
+    text_save_dir = BASE_DIR / os.getenv("TRANSCRIPTS_DIR", "temp_data/transcripts")
     os.makedirs(text_save_dir, exist_ok=True)
 
-    print(f"[TRANSCRIBE] Starting transcription {session_id}\nModel={model_size}, lang={language}, temp={temperature}")
+    logger.info(f"[TRANSCRIBE] Starting transcription {session_id}\nModel={model_size}, lang={language}, temp={temperature}")
 
     # Load whisper model (this can be cached at higher level too)
+    logger.info("[LOAD MODEL]")
     model = whisper.load_model(model_size)
 
     # Transcribe audio
+    logger.info("[EXECUTE WHISPER]")
     result = model.transcribe(
         file_path,
         language=None if language == "auto" else language,
         temperature=temperature
     )
+    logger.info("[WHISPER EXECUTED]")
 
     segments = result["segments"]
 
@@ -80,5 +87,7 @@ def transcribe_audio(file_path: str, args: dict) -> list:
         file_path_txt = os.path.join(text_save_dir, filename)
         with open(file_path_txt, "w", encoding="utf-8") as f:
             f.write(transcript)
+
+    logger.info("[WHISPER WORKER SUCCESSFULLY FINISHED]")
 
     return [summary, file_path_txt, session_id]
